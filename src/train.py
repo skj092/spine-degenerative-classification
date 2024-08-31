@@ -5,7 +5,8 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from collections import OrderedDict
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import autocast
+from torch.amp import GradScaler
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from torch import nn
@@ -95,17 +96,26 @@ def validate_one_epoch(model, valid_dl, criterion, device):
             for x, t in pbar:
                 x, t = x.to(device), t.to(device)
                 with autocast(enabled=USE_AMP, dtype=torch.half):
-                    loss = 0
                     y = model(x)
-                    for col in range(N_LABELS):
-                        pred = y[:, col*3:col*3+3]
-                        gt = t[:, col]
-                        loss += criterion(pred, gt) / N_LABELS
-                        y_preds.append(pred.cpu())
-                        labels.append(gt.cpu())
-                    total_loss += loss.item()
+                
+                # Initialize batch loss
+                loss = 0
+                for col in range(N_LABELS):
+                    pred = y[:, col*3:col*3+3].float()  # Convert logits to FP32
+                    gt = t[:, col].long()  # Ensure targets are in Long format
+                    loss += criterion(pred, gt) / N_LABELS  # Average loss across labels
+                    
+                    y_preds.append(pred.cpu())
+                    labels.append(gt.cpu())
+                
+                total_loss += loss.item()  # Accumulate total loss
 
-    return total_loss / len(valid_dl), torch.cat(y_preds), torch.cat(labels)
+    avg_loss = total_loss / len(valid_dl)  # Average loss over all batches
+    y_preds = torch.cat(y_preds)
+    labels = torch.cat(labels)
+    
+    return avg_loss, y_preds, labels
+
 
 
 def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir):
@@ -113,13 +123,11 @@ def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, 
         model_to_save = model.module if hasattr(model, 'module') else model
 
         if val_loss < best_loss:
-            print(
-                f'epoch:{epoch}, best loss updated from {best_loss:.6f} to {val_loss:.6f}')
+            print(f'epoch:{epoch}, best loss updated from {best_loss:.6f} to {val_loss:.6f}')
             best_loss = val_loss
 
         if val_wll < best_wll:
-            print(
-                f'epoch:{epoch}, best wll_metric updated from {best_wll:.6f} to {val_wll:.6f}')
+            print(f'epoch:{epoch}, best wll_metric updated from {best_wll:.6f} to {val_wll:.6f}')
             best_wll = val_wll
             fname = f'{output_dir}/best_wll_model_fold-{fold}.pt'
             torch.save(model_to_save.state_dict(), fname)
@@ -148,7 +156,7 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
         scheduler = create_scheduler(optimizer, len(
             train_dl), train_params['epochs'], train_params['grad_acc'])
 
-        for epoch in range(1, train_params['epochs'] + 1):
+        for epoch in range(train_params['epochs']):
             print(f'start epoch {epoch}')
             train_loss = train_one_epoch(
                 model, train_dl, train_params['criterion'], optimizer, scheduler, scaler, train_params['grad_acc'], device)
@@ -249,7 +257,7 @@ def main():
 
     # Data Preprocessing
     df = pd.read_csv(Path(__file__).parent.parent / 'data/train.csv')
-    df = df.sample(n=100, random_state=SEED)
+    # df = df.sample(n=100, random_state=SEED)
     print(f"df shape: {df.shape}")
     df.fillna(-100, inplace=True)
     label2id = {'Normal/Mild': 0, 'Moderate': 1, 'Severe': 2}

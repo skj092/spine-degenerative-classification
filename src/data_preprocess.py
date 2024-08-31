@@ -10,7 +10,8 @@ import numpy as np
 import cv2
 
 
-rd = Path("/home/sonujha/rnd/spine-degenerative-classification")
+# rd = Path("/home/sonujha/rnd/spine-degenerative-classification")
+rd = Path('/teamspace/studios/this_studio/spine-degenerative-classification')
 
 
 # Function to convert the DICOM files to PNG
