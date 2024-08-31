@@ -106,8 +106,11 @@ def validate_one_epoch(model, valid_dl, criterion, device):
 
 def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir):
     if val_loss < best_loss or val_wll < best_wll:
-        if device != 'cuda:0':
-            model.to('cuda:0')
+        if device != torch.device('cpu'):
+            model_to_save = model.module if hasattr(
+                model, 'module') else model  # For models wrapped in DataParallel
+        else:
+            model_to_save = model
 
         if val_loss < best_loss:
             print(
@@ -119,10 +122,7 @@ def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, 
                 f'epoch:{epoch}, best wll_metric updated from {best_wll:.6f} to {val_wll:.6f}')
             best_wll = val_wll
             fname = f'{output_dir}/best_wll_model_fold-{fold}.pt'
-            torch.save(model.state_dict(), fname)
-
-        if device != 'cuda:0':
-            model.to(device)
+            torch.save(model_to_save.state_dict(), fname)
 
         return best_loss, best_wll, 0
     return best_loss, best_wll, 1
@@ -203,6 +203,7 @@ LEVELS = [
 
 MAX_GRAD_NORM = None
 N_LABELS = 25
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 model_params = {
