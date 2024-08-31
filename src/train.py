@@ -2,10 +2,11 @@ import os
 import torch
 import numpy as np
 import pandas as pd
+import logging
 from tqdm import tqdm
 from pathlib import Path
 from collections import OrderedDict
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 from torch.amp import GradScaler
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
@@ -23,6 +24,14 @@ from models import RSNA24Model
 from dataset import RSNA24Dataset
 
 # ========================= Utility Functions ===========================
+
+def setup_logger(log_file):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler(log_file, mode='w')
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(handler)
+    return logger
 
 
 def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_workers):
@@ -51,14 +60,14 @@ def create_scheduler(optimizer, train_loader_len, epochs, grad_acc):
     return get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_total_steps, num_cycles=num_cycles)
 
 
-def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, grad_acc, device):
+def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, grad_acc, device, logger):
     model.train()
     total_loss = 0
     with tqdm(train_dl, leave=True) as pbar:
         optimizer.zero_grad()
         for idx, (x, t) in enumerate(pbar):
             x, t = x.to(device), t.to(device)
-            with autocast(enabled=USE_AMP, dtype=torch.half):
+            with autocast(device_type=str(device), enabled=USE_AMP, dtype=torch.half):
                 loss = 0
                 y = model(x)
                 for col in range(N_LABELS):
@@ -83,10 +92,12 @@ def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, gr
             pbar.set_postfix(OrderedDict(
                 loss=f'{loss.item()*grad_acc:.6f}', lr=f'{optimizer.param_groups[0]["lr"]:.3e}'))
 
-    return total_loss / len(train_dl)
+    avg_loss = total_loss / len(train_dl)
+    logger.info(f'Training Loss: {avg_loss:.6f}')
+    return avg_loss
 
 
-def validate_one_epoch(model, valid_dl, criterion, device):
+def validate_one_epoch(model, valid_dl, criterion, device, logger):
     model.eval()
     total_loss = 0
     y_preds, labels = [], []
@@ -114,20 +125,20 @@ def validate_one_epoch(model, valid_dl, criterion, device):
     y_preds = torch.cat(y_preds)
     labels = torch.cat(labels)
     
+    logger.info(f'Validation Loss: {avg_loss:.6f}')
     return avg_loss, y_preds, labels
 
 
-
-def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir):
+def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir, logger):
     if val_loss < best_loss or val_wll < best_wll:
         model_to_save = model.module if hasattr(model, 'module') else model
 
         if val_loss < best_loss:
-            print(f'epoch:{epoch}, best loss updated from {best_loss:.6f} to {val_loss:.6f}')
+            logger.info(f'epoch:{epoch}, best loss updated from {best_loss:.6f} to {val_loss:.6f}')
             best_loss = val_loss
 
         if val_wll < best_wll:
-            print(f'epoch:{epoch}, best wll_metric updated from {best_wll:.6f} to {val_wll:.6f}')
+            logger.info(f'epoch:{epoch}, best wll_metric updated from {best_wll:.6f} to {val_wll:.6f}')
             best_wll = val_wll
             fname = f'{output_dir}/best_wll_model_fold-{fold}.pt'
             torch.save(model_to_save.state_dict(), fname)
@@ -136,13 +147,13 @@ def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, 
     return best_loss, best_wll, 1
 
 
-def train_and_validate(df, n_folds, seed, model_params, train_params, device, output_dir):
+def train_and_validate(df, n_folds, seed, model_params, train_params, device, output_dir, logger):
     skf = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
     best_loss, best_wll, es_step = 1.2, 1.2, 0
 
     for fold, (trn_idx, val_idx) in enumerate(skf.split(range(len(df)))):
-        print(f'\n{"#"*30}\nstart fold {fold}\n{"#"*30}\n')
-        print(f'{len(trn_idx)} training samples, {len(val_idx)} validation samples')
+        logger.info(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
+        logger.info(f'{len(trn_idx)} training samples, {len(val_idx)} validation samples')
 
         df_train, df_valid = df.iloc[trn_idx], df.iloc[val_idx]
         train_dl = create_dataloader(
@@ -157,24 +168,24 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
             train_dl), train_params['epochs'], train_params['grad_acc'])
 
         for epoch in range(train_params['epochs']):
-            print(f'start epoch {epoch}')
+            logger.info(f'Start epoch {epoch}')
             train_loss = train_one_epoch(
-                model, train_dl, train_params['criterion'], optimizer, scheduler, scaler, train_params['grad_acc'], device)
-            print(f'train_loss: {train_loss:.6f}')
+                model, train_dl, train_params['criterion'], optimizer, scheduler, scaler, train_params['grad_acc'], device, logger)
+            logger.info(f'train_loss: {train_loss:.6f}')
 
             val_loss, y_preds, labels = validate_one_epoch(
-                model, valid_dl, train_params['criterion'], device)
+                model, valid_dl, train_params['criterion'], device, logger)
             val_wll = train_params['criterion2'](y_preds, labels)
-            print(f'val_loss: {val_loss:.6f}, val_wll: {val_wll:.6f}')
+            logger.info(f'val_loss: {val_loss:.6f}, val_wll: {val_wll:.6f}')
 
             best_loss, best_wll, es_step = save_best_model(
-                model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir)
+                model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir, logger)
             if es_step >= train_params['early_stopping_epoch']:
-                print('early stopping')
+                logger.info('Early stopping')
                 break
 
 
-def evaluate_model(df, skf, model_class, model_params, transforms_val, device, output_dir, n_workers, n_labels):
+def evaluate_model(df, skf, model_class, model_params, transforms_val, device, output_dir, n_workers, n_labels, logger):
     cv_score = 0
     all_y_preds = []
     all_labels = []
@@ -182,7 +193,7 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
         weight=torch.tensor([1.0, 2.0, 4.0]).to(device))
 
     for fold, (trn_idx, val_idx) in enumerate(skf.split(range(len(df)))):
-        print(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
+        logger.info(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
 
         # Create validation dataset and loader
         df_valid = df.iloc[val_idx]
@@ -226,28 +237,32 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
     y_preds = torch.cat(all_y_preds)
     labels = torch.cat(all_labels)
 
+    logger.info(f'Evaluation complete for {len(all_y_preds)} folds.')
     return y_preds, labels
 
 
-def compute_cv_score(y_preds, labels, weights):
+def compute_cv_score(y_preds, labels, weights, logger):
     cv = log_loss(labels, y_preds.softmax(1).numpy(),
                   normalize=True, sample_weight=weights)
+    logger.info(f'CV Score: {cv:.6f}')
     return cv
 
 
-def compute_random_score(labels, n_classes, weights):
+def compute_random_score(labels, n_classes, weights, logger):
     random_pred = np.ones((labels.shape[0], n_classes)) / n_classes
     random_score = log_loss(labels, random_pred,
                             normalize=True, sample_weight=weights)
+    logger.info(f'Random Score: {random_score:.6f}')
     return random_score
 
 
-def save_predictions_and_labels(y_preds, labels, output_dir):
+def save_predictions_and_labels(y_preds, labels, output_dir, logger):
     np.save(f'{output_dir}/labels.npy', labels.numpy())
     np.save(f'{output_dir}/final_oof.npy', y_preds.numpy())
+    logger.info(f'Predictions and labels saved to {output_dir}')
+
 
 # ========================= Main Script ============================
-
 
 def main():
     # Initialize directories and seed
@@ -255,10 +270,14 @@ def main():
     output_dir = f'rsna24-results'
     os.makedirs(output_dir, exist_ok=True)
 
+    # Setup logging
+    log_file = os.path.join(output_dir, 'training_log.txt')
+    logger = setup_logger(log_file)
+
     # Data Preprocessing
     df = pd.read_csv(Path(__file__).parent.parent / 'data/train.csv')
     # df = df.sample(n=100, random_state=SEED)
-    print(f"df shape: {df.shape}")
+    logger.info(f"DataFrame shape: {df.shape}")
     df.fillna(-100, inplace=True)
     label2id = {'Normal/Mild': 0, 'Moderate': 1, 'Severe': 2}
     df.replace(label2id, inplace=True)
@@ -287,25 +306,21 @@ def main():
 
     # Train and validate the model
     train_and_validate(df, N_FOLDS, SEED, model_params,
-                       train_params, device, output_dir)
+                       train_params, device, output_dir, logger)
 
     # Evaluate the model
     skf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
     y_preds, labels = evaluate_model(
-        df, skf, RSNA24Model, model_params, transforms_val, device, output_dir, os.cpu_count(), N_LABELS)
+        df, skf, RSNA24Model, model_params, transforms_val, device, output_dir, os.cpu_count(), N_LABELS, logger)
 
     # Compute CV score and random score
     weights = [1 if l == 0 else 2 if l == 1 else 4 for l in labels.numpy()]
-    cv_score = compute_cv_score(y_preds, labels, weights)
-    print('cv score:', cv_score)
-
-    random_score = compute_random_score(labels, N_CLASSES, weights)
-    print('random score:', random_score)
+    cv_score = compute_cv_score(y_preds, labels, weights, logger)
+    random_score = compute_random_score(labels, N_CLASSES, weights, logger)
 
     # Save predictions and labels
-    save_predictions_and_labels(y_preds, labels, output_dir)
+    save_predictions_and_labels(y_preds, labels, output_dir, logger)
 
 
 if __name__ == "__main__":
     main()
-

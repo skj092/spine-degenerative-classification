@@ -8,7 +8,7 @@ import numpy as np
 NOT_DEBUG = True  # True -> run naormally, False -> debug mode, with lesser computing cost
 
 OUTPUT_DIR = f'rsna24-results'
-device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 N_WORKERS = os.cpu_count()
 USE_AMP = True  # can change True if using T4 or newer than Ampere
 SEED = 8620
@@ -25,7 +25,7 @@ EPOCHS = 20 if NOT_DEBUG else 1
 MODEL_NAME = "tf_efficientnet_b3.ns_jft_in1k" if NOT_DEBUG else "tf_efficientnet_b0.ns_jft_in1k"
 
 GRAD_ACC = 2
-TGT_BATCH_SIZE = 32
+TGT_BATCH_SIZE = 64
 BATCH_SIZE = TGT_BATCH_SIZE // GRAD_ACC
 MAX_GRAD_NORM = None
 EARLY_STOPPING_EPOCH = 3
