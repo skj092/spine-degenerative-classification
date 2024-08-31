@@ -1,25 +1,29 @@
-from collections import OrderedDict
-from tqdm import tqdm
-from torch.cuda.amp import autocast, GradScaler
-from torch import nn
-from config import MODEL_NAME
-from config import USE_AMP
-from models import RSNA24Model
-from torch.optim import AdamW
-from config import EPOCHS
-from config import transforms_train, transforms_val, IN_CHANS, N_CLASSES, BATCH_SIZE, GRAD_ACC, SEED, N_FOLDS, LR, WD, device
-from sklearn.model_selection import KFold
-import torch
 import os
+import torch
+import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from pathlib import Path
-from dataset import RSNA24Dataset
+from collections import OrderedDict
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from config import set_seed
+from torch.optim import AdamW
+from torch import nn
+from sklearn.model_selection import KFold
+from sklearn.metrics import log_loss
 from transformers import get_cosine_schedule_with_warmup
 
+from config import (
+    MODEL_NAME, USE_AMP, EPOCHS, transforms_train, transforms_val,
+    IN_CHANS, N_CLASSES, BATCH_SIZE, GRAD_ACC, SEED, N_FOLDS,
+    LR, WD, device, set_seed, MAX_GRAD_NORM, N_LABELS, EARLY_STOPPING_EPOCH
+)
+from models import RSNA24Model
+from dataset import RSNA24Dataset
 
-# =========================Training===========================
+# ========================= Utility Functions ===========================
+
+
 def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_workers):
     dataset = RSNA24Dataset(df, phase=phase, transform=transform)
     return DataLoader(
@@ -106,11 +110,7 @@ def validate_one_epoch(model, valid_dl, criterion, device):
 
 def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir):
     if val_loss < best_loss or val_wll < best_wll:
-        if device != torch.device('cpu'):
-            model_to_save = model.module if hasattr(
-                model, 'module') else model  # For models wrapped in DataParallel
-        else:
-            model_to_save = model
+        model_to_save = model.module if hasattr(model, 'module') else model
 
         if val_loss < best_loss:
             print(
@@ -166,65 +166,135 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
                 break
 
 
-# Example of usage:
-N_WORKERS = os.cpu_count()
-OUTPUT_DIR = f'rsna24-results'
-SEED = 862
-EARLY_STOPPING_EPOCH = 3
-set_seed(42)
-rd = Path(__file__).parent.parent
+def evaluate_model(df, skf, model_class, model_params, transforms_val, device, output_dir, n_workers, n_labels):
+    cv_score = 0
+    all_y_preds = []
+    all_labels = []
+    criterion = nn.CrossEntropyLoss(
+        weight=torch.tensor([1.0, 2.0, 4.0]).to(device))
 
-# Data Preprocessing
-df = pd.read_csv(rd / 'data/train.csv')
-df = df.sample(n=100, random_state=SEED)
-print(df.head())
+    for fold, (trn_idx, val_idx) in enumerate(skf.split(range(len(df)))):
+        print(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
 
-# fill missing values
-df = df.fillna(-100)
-label2id = {'Normal/Mild': 0, 'Moderate': 1, 'Severe': 2}
-df = df.replace(label2id)
+        # Create validation dataset and loader
+        df_valid = df.iloc[val_idx]
+        valid_ds = RSNA24Dataset(
+            df_valid, phase='valid', transform=transforms_val)
+        valid_dl = DataLoader(
+            valid_ds,
+            batch_size=1,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=False,
+            num_workers=n_workers
+        )
 
-CONDITIONS = [
-    'Spinal Canal Stenosis',
-    'Left Neural Foraminal Narrowing',
-    'Right Neural Foraminal Narrowing',
-    'Left Subarticular Stenosis',
-    'Right Subarticular Stenosis'
-]
+        # Load model
+        model = model_class(**model_params)
+        model_path = f'{output_dir}/best_wll_model_fold-{fold}.pt'
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        model.to(device)
+        model.eval()
 
-LEVELS = [
-    'L1/L2',
-    'L2/L3',
-    'L3/L4',
-    'L4/L5',
-    'L5/S1',
-]
+        fold_y_preds = []
+        fold_labels = []
+
+        # Inference
+        with tqdm(valid_dl, leave=True) as pbar:
+            for x, t in pbar:
+                x, t = x.to(device), t.to(device)
+                with autocast(enabled=USE_AMP):
+                    y = model(x)
+                    for col in range(n_labels):
+                        pred = y[:, col*3:col*3+3]
+                        gt = t[:, col]
+                        fold_y_preds.append(pred.cpu())
+                        fold_labels.append(gt.cpu())
+
+        all_y_preds.append(torch.cat(fold_y_preds))
+        all_labels.append(torch.cat(fold_labels))
+
+    # Concatenate predictions and labels across all folds
+    y_preds = torch.cat(all_y_preds)
+    labels = torch.cat(all_labels)
+
+    return y_preds, labels
 
 
-MAX_GRAD_NORM = None
-N_LABELS = 25
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+def compute_cv_score(y_preds, labels, weights):
+    cv = log_loss(labels, y_preds.softmax(1).numpy(),
+                  normalize=True, sample_weight=weights)
+    return cv
 
 
-model_params = {
-    'model_name': MODEL_NAME,
-    'in_chans': IN_CHANS,
-    'n_classes': N_CLASSES,
-    'lr': LR,
-    'wd': WD
-}
+def compute_random_score(labels, n_classes, weights):
+    random_pred = np.ones((labels.shape[0], n_classes)) / n_classes
+    random_score = log_loss(labels, random_pred,
+                            normalize=True, sample_weight=weights)
+    return random_score
 
-train_params = {
-    'transform_train': transforms_train,
-    'transform_val': transforms_val,
-    'batch_size': BATCH_SIZE,
-    'n_workers': N_WORKERS,
-    'epochs': EPOCHS,
-    'grad_acc': GRAD_ACC,
-    'criterion': nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0]).to(device)),
-    'criterion2': nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0])),
-    'early_stopping_epoch': EARLY_STOPPING_EPOCH
-}
 
-train_and_validate(df, N_FOLDS, SEED, model_params,
-                   train_params, device, OUTPUT_DIR)
+def save_predictions_and_labels(y_preds, labels, output_dir):
+    np.save(f'{output_dir}/labels.npy', labels.numpy())
+    np.save(f'{output_dir}/final_oof.npy', y_preds.numpy())
+
+# ========================= Main Script ============================
+
+
+def main():
+    # Initialize directories and seed
+    set_seed(SEED)
+    output_dir = f'rsna24-results'
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Data Preprocessing
+    df = pd.read_csv(Path(__file__).parent.parent / 'data/train.csv')
+    df = df.sample(n=100, random_state=SEED)
+    df.fillna(-100, inplace=True)
+    label2id = {'Normal/Mild': 0, 'Moderate': 1, 'Severe': 2}
+    df.replace(label2id, inplace=True)
+
+    model_params = {
+        'model_name': MODEL_NAME,
+        'in_chans': IN_CHANS,
+        'n_classes': N_CLASSES,
+        'pretrained': True,
+        'features_only': False,
+    }
+
+    train_params = {
+        'transform_train': transforms_train,
+        'transform_val': transforms_val,
+        'batch_size': BATCH_SIZE,
+        'n_workers': os.cpu_count(),
+        'epochs': EPOCHS,
+        'grad_acc': GRAD_ACC,
+        'criterion': nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0]).to(device)),
+        'criterion2': nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0])),
+        'early_stopping_epoch': EARLY_STOPPING_EPOCH
+    }
+
+    # Train and validate the model
+    train_and_validate(df, N_FOLDS, SEED, model_params,
+                       train_params, device, output_dir)
+
+    # Evaluate the model
+    skf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=SEED)
+    y_preds, labels = evaluate_model(
+        df, skf, RSNA24Model, model_params, transforms_val, device, output_dir, os.cpu_count(), N_LABELS)
+
+    # Compute CV score and random score
+    weights = [1 if l == 0 else 2 if l == 1 else 4 for l in labels.numpy()]
+    cv_score = compute_cv_score(y_preds, labels, weights)
+    print('cv score:', cv_score)
+
+    random_score = compute_random_score(labels, N_CLASSES, weights)
+    print('random score:', random_score)
+
+    # Save predictions and labels
+    save_predictions_and_labels(y_preds, labels, output_dir)
+
+
+if __name__ == "__main__":
+    main()
+
