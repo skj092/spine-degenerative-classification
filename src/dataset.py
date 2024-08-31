@@ -1,12 +1,12 @@
 import numpy as np
 from pathlib import Path
 import pandas as pd
-from config import transforms_train
+from conf import transforms_train
 from glob import glob
 from PIL import Image
 from matplotlib import pyplot as plt
 from torch.utils.data import Dataset, DataLoader
-from config import IN_CHANS
+from conf import config
 
 
 # Dataset and DataLoader Class
@@ -20,7 +20,7 @@ class RSNA24Dataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx):
-        x = np.zeros((512, 512, IN_CHANS), dtype=np.uint8)
+        x = np.zeros((512, 512, config.IN_CHANS), dtype=np.uint8)
         t = self.df.iloc[idx]
         st_id = int(t['study_id'])
         label = t[1:].values.astype(np.int64)
