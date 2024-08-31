@@ -472,7 +472,7 @@ def compute_random_score(labels, n_classes, weights, logger):
 
 def save_predictions_and_labels(y_preds, labels, output_dir, logger):
     np.save(f'{output_dir}/labels.npy', labels.numpy())
-    np.save(f'{output_dir}/final_oof.npy', y_preds.numpy())
+    np.save(f'{output_dir}/final_oof.npy', y_preds.float().numpy())
     logger.info(f'Predictions and labels saved to {output_dir}')
 
 # ========================= Main Script ============================
@@ -528,8 +528,8 @@ def main():
     ]
 
     # Train and validate the model
-    train_and_validate(df, config.N_FOLDS, config.SEED, model_params,
-                       train_params, device, output_dir, logger, callbacks=callbacks)
+#    train_and_validate(df, config.N_FOLDS, config.SEED, model_params,
+#                       train_params, device, output_dir, logger, callbacks=callbacks)
 
     # Evaluate the model
     skf = KFold(n_splits=config.N_FOLDS, shuffle=True,
@@ -540,11 +540,11 @@ def main():
     # Compute CV score and random score
     weights = [1 if l == 0 else 2 if l == 1 else 4 for l in labels.numpy()]
     cv_score = compute_cv_score(y_preds, labels, weights, logger)
-    random_score = compute_random_score(
-        labels, config.N_CLASSES, weights, logger)
-
     print(f"CV Score: {cv_score:.6f}")
-    print(f"Random Score: {random_score:.6f}")
+#    random_score = compute_random_score(
+#        labels, config.N_CLASSES, weights, logger)
+#    print(f"Random Score: {random_score:.6f}")
+
     # Save predictions and labels
     save_predictions_and_labels(y_preds, labels, output_dir, logger)
 
