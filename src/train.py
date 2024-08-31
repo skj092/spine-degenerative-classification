@@ -258,8 +258,8 @@ def main():
         'model_name': MODEL_NAME,
         'in_chans': IN_CHANS,
         'n_classes': N_CLASSES,
-        'pretrained': True,
-        'features_only': False,
+        "lr": LR,
+        "wd": WD
     }
 
     train_params = {
