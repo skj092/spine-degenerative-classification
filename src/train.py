@@ -250,6 +250,7 @@ def main():
     # Data Preprocessing
     df = pd.read_csv(Path(__file__).parent.parent / 'data/train.csv')
     df = df.sample(n=100, random_state=SEED)
+    print(f"df shape: {df.shape}")
     df.fillna(-100, inplace=True)
     label2id = {'Normal/Mild': 0, 'Moderate': 1, 'Severe': 2}
     df.replace(label2id, inplace=True)
