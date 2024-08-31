@@ -21,7 +21,7 @@ N_CLASSES = 3 * N_LABELS
 AUG_PROB = 0.75
 
 N_FOLDS = 5 if NOT_DEBUG else 2
-EPOCHS = 20 if NOT_DEBUG else 2
+EPOCHS = 20 if NOT_DEBUG else 1
 MODEL_NAME = "tf_efficientnet_b3.ns_jft_in1k" if NOT_DEBUG else "tf_efficientnet_b0.ns_jft_in1k"
 
 GRAD_ACC = 2

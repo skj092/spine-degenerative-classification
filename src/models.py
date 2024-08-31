@@ -3,7 +3,7 @@ import timm
 
 
 class RSNA24Model(nn.Module):
-    def __init__(self, model_name, in_chans=10, n_classes=75, pretrained=True, features_only=False):
+    def __init__(self, model_name, in_chans=10, n_classes=75, pretrained=True, features_only=False, lr=2e-4, wd=1e-2):
         super().__init__()
         self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=in_chans,
                                        num_classes=n_classes, features_only=features_only, global_pool='avg')

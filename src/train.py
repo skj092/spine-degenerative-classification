@@ -37,7 +37,7 @@ def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_
 
 
 def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device):
-    model = RSNA24Model(model_name, in_chans, n_classes, pretrained=True)
+    model = RSNA24Model(model_name=model_name, in_chans=in_chans, n_classes=n_classes)
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     return model, optimizer
@@ -258,11 +258,13 @@ def main():
         'model_name': MODEL_NAME,
         'in_chans': IN_CHANS,
         'n_classes': N_CLASSES,
-        "lr": LR,
-        "wd": WD
+        'lr': LR,
+        'wd': WD,
     }
 
     train_params = {
+        "lr": LR,
+        "wd": WD,
         'transform_train': transforms_train,
         'transform_val': transforms_val,
         'batch_size': BATCH_SIZE,
