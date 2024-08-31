@@ -88,6 +88,7 @@ def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_
         shuffle=shuffle,
         pin_memory=True,
         drop_last=drop_last,
+        prefetch_factor=2,
         num_workers=num_workers
     )
 

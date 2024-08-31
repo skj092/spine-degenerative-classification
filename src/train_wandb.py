@@ -1,3 +1,4 @@
+import argparse
 import wandb
 from dataset import RSNA24Dataset
 from models import RSNA24Model
@@ -22,13 +23,8 @@ from sklearn.metrics import log_loss
 from transformers import get_cosine_schedule_with_warmup
 from conf import get_config
 
-config = get_config('local')
-
-# Initialize Weights & Biases
-wandb.init(project="rsna24", config=config)
 
 # ========================= Callback Classes ===========================
-
 
 class Callback:
     def on_epoch_begin(self, epoch, logs=None):
@@ -91,7 +87,8 @@ def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_
         shuffle=shuffle,
         pin_memory=True,
         drop_last=drop_last,
-        num_workers=num_workers
+        num_workers=num_workers,
+        prefetch_factor=2
     )
 
 
@@ -337,7 +334,7 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
         df_valid = df.iloc[val_idx]
         valid_ds = RSNA24Dataset(
             df_valid, phase='valid', transform=transforms_val)
-        valid_dl = DataLoader(valid_ds, batch_size=1, shuffle=False,
+        valid_dl = DataLoader(valid_ds, batch_size=1, shuffle=False, prefetch_factor=2,
                               pin_memory=True, drop_last=False, num_workers=n_workers)
 
         model = model_class(**model_params)
@@ -483,4 +480,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # Take config from command line
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", type=str, default="local")
+    config = get_config(parser.parse_args().env)
+    wandb.init(project="rsna24", config=config)
     main()
