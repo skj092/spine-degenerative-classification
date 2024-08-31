@@ -211,7 +211,6 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
 
     for fold, (trn_idx, val_idx) in enumerate(skf.split(range(len(df)))):
         logger.info(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
-        print(f"Fold: {fold}")
         logger.info(
             f'{len(trn_idx)} training samples, {len(val_idx)} validation samples')
 
@@ -304,7 +303,7 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, fold, loss, outp
 
 
 def load_checkpoint(model, optimizer, scheduler, scaler, checkpoint_path, device):
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     if scheduler and 'scheduler_state_dict' in checkpoint:
@@ -415,7 +414,7 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
 
         model = model_class(**model_params)
         checkpoint_path = f'{output_dir}/best_model_fold_{fold}.pth'
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.to(device)
         model.eval()
@@ -497,7 +496,7 @@ def main():
     logger.info(f"DataFrame shape: {df.shape}")
     df.fillna(-100, inplace=True)
     label2id = {'Normal/Mild': 0, 'Moderate': 1, 'Severe': 2}
-    df.replace(label2id, inplace=True)
+    df = df.map(lambda x: label2id.get(x, x))
 
     model_params = {
         'model_name': config.MODEL_NAME,
@@ -528,8 +527,8 @@ def main():
     ]
 
     # Train and validate the model
-#    train_and_validate(df, config.N_FOLDS, config.SEED, model_params,
-#                       train_params, device, output_dir, logger, callbacks=callbacks)
+    train_and_validate(df, config.N_FOLDS, config.SEED, model_params,
+                       train_params, device, output_dir, logger, callbacks=callbacks)
 
     # Evaluate the model
     skf = KFold(n_splits=config.N_FOLDS, shuffle=True,
@@ -541,9 +540,10 @@ def main():
     weights = [1 if l == 0 else 2 if l == 1 else 4 for l in labels.numpy()]
     cv_score = compute_cv_score(y_preds, labels, weights, logger)
     print(f"CV Score: {cv_score:.6f}")
-#    random_score = compute_random_score(
-#        labels, config.N_CLASSES, weights, logger)
-#    print(f"Random Score: {random_score:.6f}")
+
+    random_pred = np.ones((y_preds.shape[0], 3)) / 3.0
+    random_score = log_loss(labels, random_pred, normalize=True, sample_weight=weights)
+    print(f"Random Score: {random_score:.6f}")
 
     # Save predictions and labels
     save_predictions_and_labels(y_preds, labels, output_dir, logger)
