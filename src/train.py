@@ -304,7 +304,8 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, fold, loss, outp
 
 
 def load_checkpoint(model, optimizer, scheduler, scaler, checkpoint_path, device):
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    checkpoint = torch.load(
+        checkpoint_path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     if scheduler and 'scheduler_state_dict' in checkpoint:
@@ -330,7 +331,7 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
         train_dl = create_dataloader(
             df_train, 'train', train_params['transform_train'], train_params['batch_size'], True, True, train_params['n_workers'])
         valid_dl = create_dataloader(
-            df_valid, 'valid', train_params['transform_val'], train_params['batch_size']*2, False, False, train_params['n_workers'])
+            df_valid, 'valid', train_params['transform_val'], train_params['batch_size'] * 2, False, False, train_params['n_workers'])
 
         model, optimizer = create_model_and_optimizer(
             **model_params, device=device)
@@ -338,7 +339,6 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
         scheduler = create_scheduler(optimizer, len(
             train_dl), train_params['epochs'], train_params['grad_acc'])
 
-        # Check if a checkpoint exists for this fold
         checkpoint_path = f"{output_dir}/checkpoint_fold_{fold}.pth"
         start_epoch = 0
         best_loss = float('inf')
@@ -353,7 +353,6 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
 
         for epoch in range(start_epoch, train_params['epochs']):
             logger.info(f'Start epoch {epoch}')
-
             for callback in callbacks:
                 callback.on_epoch_begin(epoch)
 
@@ -366,11 +365,6 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
             val_wll = train_params['criterion2'](y_preds, labels)
             logger.info(f'val_loss: {val_loss:.6f}, val_wll: {val_wll:.6f}')
 
-            # Save checkpoint
-            save_checkpoint(model, optimizer, scheduler, scaler,
-                            epoch, fold, val_loss, output_dir)
-
-            # Update callbacks
             logs = {
                 'model': model,
                 'optimizer': optimizer,
@@ -386,10 +380,18 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
             if val_loss < best_loss:
                 best_loss = val_loss
                 logger.info(f'New best loss: {best_loss:.6f}')
+                save_checkpoint(model, optimizer, scheduler,
+                                scaler, epoch, fold, best_loss, output_dir)
 
-            if train_params['early_stopping_epoch'] and epoch - start_epoch >= train_params['early_stopping_epoch']:
+            if any(callback.early_stop for callback in callbacks if isinstance(callback, EarlyStopping)):
                 logger.info('Early stopping')
                 break
+
+        # Ensure the best model is saved at the end of the fold, even if early stopping occurs
+        logger.info(
+            f"Saving the best model for fold {fold} with loss {best_loss:.6f}")
+        save_checkpoint(model, optimizer, scheduler, scaler,
+                        epoch, fold, best_loss, output_dir)
 
         for callback in callbacks:
             callback.on_train_end()
@@ -400,22 +402,26 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
 def evaluate_model(df, skf, model_class, model_params, transforms_val, device, output_dir, n_workers, n_labels, logger):
     all_y_preds = []
     all_labels = []
-    criterion = nn.CrossEntropyLoss(
-        weight=torch.tensor([1.0, 2.0, 4.0]).to(device))
+    criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0]).to(device))
 
     for fold, (_, val_idx) in enumerate(skf.split(range(len(df)))):
         logger.info(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
         print(f"Fold: {fold}")
 
         df_valid = df.iloc[val_idx]
-        valid_ds = RSNA24Dataset(
-            df_valid, phase='valid', transform=transforms_val)
-        valid_dl = DataLoader(valid_ds, batch_size=1, shuffle=False,
-                              pin_memory=True, drop_last=False, num_workers=n_workers)
+        valid_ds = RSNA24Dataset(df_valid, phase='valid', transform=transforms_val)
+        valid_dl = DataLoader(valid_ds, batch_size=1, shuffle=False, pin_memory=True, drop_last=False, num_workers=n_workers)
 
         model = model_class(**model_params)
         checkpoint_path = f'{output_dir}/best_model_fold_{fold}.pth'
-        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+
+        # Check if the checkpoint exists
+        if not os.path.exists(checkpoint_path):
+            logger.warning(f"Checkpoint for fold {fold} not found at {checkpoint_path}. Skipping this fold.")
+            continue
+
+        # Load the checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.to(device)
         model.eval()
@@ -435,14 +441,18 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
                             fold_y_preds.append(pred.cpu())
                             fold_labels.append(gt.cpu())
 
-        all_y_preds.append(torch.cat(fold_y_preds))
-        all_labels.append(torch.cat(fold_labels))
+        if fold_y_preds:
+            all_y_preds.append(torch.cat(fold_y_preds))
+            all_labels.append(torch.cat(fold_labels))
 
-    y_preds = torch.cat(all_y_preds)
-    labels = torch.cat(all_labels)
-
-    logger.info(f'Evaluation complete for {len(all_y_preds)} folds.')
-    return y_preds, labels
+    if all_y_preds:
+        y_preds = torch.cat(all_y_preds)
+        labels = torch.cat(all_labels)
+        logger.info(f'Evaluation complete for {len(all_y_preds)} folds.')
+        return y_preds, labels
+    else:
+        logger.error("No valid folds found for evaluation.")
+        return None, None
 
 
 def compute_cv_score(y_preds, labels, weights, logger):
@@ -543,7 +553,8 @@ def main():
     print(f"CV Score: {cv_score:.6f}")
 
     random_pred = np.ones((y_preds.shape[0], 3)) / 3.0
-    random_score = log_loss(labels, random_pred, normalize=True, sample_weight=weights)
+    random_score = log_loss(labels, random_pred,
+                            normalize=True, sample_weight=weights)
     print(f"Random Score: {random_score:.6f}")
 
     # Save predictions and labels
@@ -552,4 +563,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
