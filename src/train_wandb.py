@@ -339,8 +339,17 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
 
         model = model_class(**model_params)
         checkpoint_path = f'{output_dir}/best_model_fold_{fold}.pth'
-        checkpoint = torch.load(
-            checkpoint_path, map_location=device, weights_only=False)
+
+        # Check if the checkpoint exists
+        if not os.path.exists(checkpoint_path):
+            logger.warning(
+                f"Checkpoint for fold {fold} not found at {checkpoint_path}. Skipping this fold.")
+            wandb.log(
+                {"warning": f"Checkpoint for fold {fold} not found. Skipping this fold."})
+            continue
+
+        # Load the checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.to(device)
         model.eval()
@@ -360,15 +369,20 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
                             fold_y_preds.append(pred.cpu())
                             fold_labels.append(gt.cpu())
 
-        all_y_preds.append(torch.cat(fold_y_preds))
-        all_labels.append(torch.cat(fold_labels))
+        if fold_y_preds:
+            all_y_preds.append(torch.cat(fold_y_preds))
+            all_labels.append(torch.cat(fold_labels))
 
-    y_preds = torch.cat(all_y_preds)
-    labels = torch.cat(all_labels)
-
-    logger.info(f'Evaluation complete for {len(all_y_preds)} folds.')
-    wandb.log({"evaluation_complete": True})
-    return y_preds, labels
+    if all_y_preds:
+        y_preds = torch.cat(all_y_preds)
+        labels = torch.cat(all_labels)
+        logger.info(f'Evaluation complete for {len(all_y_preds)} folds.')
+        wandb.log({"evaluation_complete": True})
+        return y_preds, labels
+    else:
+        logger.error("No valid folds found for evaluation.")
+        wandb.log({"error": "No valid folds found for evaluation."})
+        return None, None
 
 
 def compute_cv_score(y_preds, labels, weights, logger):
