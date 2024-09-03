@@ -36,8 +36,8 @@ class LocalConfig(Config):
     N_WORKERS = 0
     NOT_DEBUG = True
     MODEL_NAME = "tf_efficientnet_b0.ns_jft_in1k"
-    EPOCHS = 3
-    N_FOLDS = 5
+    EPOCHS = 2
+    N_FOLDS = 2
     subset_size = 5
 
 
