@@ -18,6 +18,27 @@ from conf import get_config
 from utils import (setup_logger, compute_cv_score,
                    save_predictions_and_labels)
 
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
+backend = 'nccl' # or 'gloo' or 'mpi' or 'nccl'
+
+
+# variout inits, derived attributes, I/O setup, etc.
+ddp = int(os.environ.get('RANK', -1)) != -1 # is this a DDP run?
+if ddp:
+    init_process_group(backend=backend)
+    ddp_rank = int(os.environ.get('RANK'))
+    ddp_local_rank = int(os.environ.get('LOCAL_RANK'))
+    ddp_world_size = int(os.environ.get('WORLD_SIZE'))
+    device = f"cuda:{ddp_local_rank}"
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0 # this process with do logging, checkpointing etc.
+    seed_offset = ddp_rank # each process will have a different seed
+    assert gradient_accumulation_steps % ddp_world_size == 0, "gradient_accumulation_steps must be divisible by WORLD_SIZE"
+    gradient_accumulation_steps = gradient_accumulation_steps // ddp_world_size
+else:
+    master_process = True
+    seed_offset = 0
 
 def main(data_dir: str, config: dict):
     # Initialize directories and seed
