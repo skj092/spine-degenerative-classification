@@ -500,4 +500,6 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="data")
     config = get_config(parser.parse_args().env)
     wandb.init(project="rsna24", config=config)
+    print(f"Using config: {config}")
+    print(f"Data directory: {parser.parse_args().data_dir}")
     main(data_dir=parser.parse_args().data_dir)
