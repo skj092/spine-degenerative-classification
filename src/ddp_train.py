@@ -19,10 +19,6 @@ from PIL import Image
 from glob import glob
 from matplotlib import pyplot as plt
 from conf import get_config, transforms_train, transforms_val, device, set_seed
-
-# Load configuration
-config = get_config('local')
-
 # ========================= Callback Classes ===========================
 
 class Callback:
@@ -565,5 +561,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='./data')
+    parser.add_argument('--config', type=str, default='local')
+    config = get_config(parser.parse_args().config)
     main(parser.parse_args().data_dir)
 
