@@ -489,9 +489,9 @@ class RSNA24Dataset(Dataset):
 # ========================= Main Script ============================
 
 def main(data_dir: str):
-    # Parse the rank and world_size
-    rank = int(os.environ['RANK'])
-    world_size = int(os.environ['WORLD_SIZE'])
+    # Manually set rank and world_size for Kaggle
+    world_size = 2  # Number of GPUs available
+    rank = int(os.environ.get('LOCAL_RANK', 0))  # Adjust based on the GPU ID
 
     # Initialize process group and set up GPU device
     setup(rank, world_size)
