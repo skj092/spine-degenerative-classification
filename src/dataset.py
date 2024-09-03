@@ -75,6 +75,19 @@ class RSNA24Dataset(Dataset):
         return x, label
 
 
+def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_workers):
+    dataset = RSNA24Dataset(df, phase=phase, transform=transform)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        pin_memory=True,
+        drop_last=drop_last,
+        num_workers=num_workers,
+        prefetch_factor=2
+    )
+
+
 if __name__ == "__main__":
     rd = Path(__file__).parent.parent
     df = pd.read_csv(rd / 'data/train.csv')
