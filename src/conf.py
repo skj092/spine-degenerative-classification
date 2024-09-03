@@ -28,6 +28,7 @@ class Config:
     MODEL_NAME = "tf_efficientnet_b3.ns_jft_in1k"
     BATCH_SIZE = 32 // GRAD_ACC
     subset_size = None
+    WWANDB_API_KEY="97b5307e24cc3a77259ade3057e4eea6fd2addb0"
 
 
 class LocalConfig(Config):
