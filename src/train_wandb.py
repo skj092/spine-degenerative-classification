@@ -373,16 +373,11 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
             all_y_preds.append(torch.cat(fold_y_preds))
             all_labels.append(torch.cat(fold_labels))
 
-    if all_y_preds:
-        y_preds = torch.cat(all_y_preds)
-        labels = torch.cat(all_labels)
-        logger.info(f'Evaluation complete for {len(all_y_preds)} folds.')
-        wandb.log({"evaluation_complete": True})
-        return y_preds, labels
-    else:
-        logger.error("No valid folds found for evaluation.")
-        wandb.log({"error": "No valid folds found for evaluation."})
-        return None, None
+    y_preds = torch.cat(all_y_preds)
+    labels = torch.cat(all_labels)
+    logger.info(f'Evaluation complete for {len(all_y_preds)} folds.')
+    wandb.log({"evaluation_complete": True})
+    return y_preds, labels
 
 
 def compute_cv_score(y_preds, labels, weights, logger):
