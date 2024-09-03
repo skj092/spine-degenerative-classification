@@ -1,3 +1,4 @@
+from models import RSNA24Model
 import os
 import torch
 import numpy as np
@@ -25,6 +26,7 @@ config = get_config('local')
 
 # ========================= Callback Classes ===========================
 
+
 class Callback:
     def on_epoch_begin(self, epoch, logs=None):
         pass
@@ -43,6 +45,7 @@ class Callback:
 
     def on_train_end(self, logs=None):
         pass
+
 
 class EarlyStopping(Callback):
     def __init__(self, monitor='val_loss', patience=5, mode='min'):
@@ -63,6 +66,7 @@ class EarlyStopping(Callback):
             if self.counter >= self.patience:
                 self.early_stop = True
                 print(f"Early stopping at epoch {epoch}")
+
 
 class ModelCheckpoint(Callback):
     def __init__(self, output_dir, monitor='val_loss', mode='min'):
@@ -110,9 +114,11 @@ def setup(rank, world_size):
     )
     torch.cuda.set_device(rank)  # Sets the device for this process
 
+
 def cleanup():
     # Cleans up the process group
     dist.destroy_process_group()
+
 
 def setup_logger(log_file):
     logger = logging.getLogger()
@@ -122,6 +128,7 @@ def setup_logger(log_file):
         '%(asctime)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
     return logger
+
 
 def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_workers, sampler=None):
     dataset = RSNA24Dataset(df, phase=phase, transform=transform)
@@ -136,6 +143,7 @@ def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_
         prefetch_factor=2
     )
 
+
 def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device):
     model = RSNA24Model(model_name=model_name,
                         in_chans=in_chans, n_classes=n_classes)
@@ -143,11 +151,13 @@ def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device):
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     return model, optimizer
 
+
 def create_scheduler(optimizer, train_loader_len, epochs, grad_acc):
     warmup_steps = epochs / 10 * train_loader_len // grad_acc
     num_total_steps = epochs * train_loader_len // grad_acc
     num_cycles = 0.475
     return get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_total_steps, num_cycles=num_cycles)
+
 
 def save_checkpoint(model, optimizer, scheduler, scaler, epoch, fold, loss, output_dir):
     checkpoint = {
@@ -160,6 +170,7 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, fold, loss, outp
     }
     torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}.pth")
 
+
 def load_checkpoint(model, optimizer, scheduler, scaler, checkpoint_path, device):
     checkpoint = torch.load(
         checkpoint_path, map_location=device, weights_only=False)
@@ -170,6 +181,7 @@ def load_checkpoint(model, optimizer, scheduler, scaler, checkpoint_path, device
     if scaler and 'scaler_state_dict' in checkpoint:
         scaler.load_state_dict(checkpoint['scaler_state_dict'])
     return checkpoint['epoch'], checkpoint['loss']
+
 
 def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, grad_acc, device, logger):
     model.train()
@@ -207,6 +219,7 @@ def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, gr
     logger.info(f'Training Loss: {avg_loss:.6f}')
     return avg_loss
 
+
 def validate_one_epoch(model, valid_dl, criterion, device, logger):
     model.eval()
     total_loss = 0
@@ -237,6 +250,7 @@ def validate_one_epoch(model, valid_dl, criterion, device, logger):
     logger.info(f'Validation Loss: {avg_loss:.6f}')
     return avg_loss, y_preds, labels
 
+
 def train_and_validate(df, n_folds, seed, model_params, train_params, rank, output_dir, logger, callbacks=None):
     if callbacks is None:
         callbacks = []
@@ -252,7 +266,8 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, rank, outp
                 f'{len(trn_idx)} training samples, {len(val_idx)} validation samples')
 
         df_train, df_valid = df.iloc[trn_idx], df.iloc[val_idx]
-        train_sampler = torch.utils.data.distributed.DistributedSampler(df_train, num_replicas=dist.get_world_size(), rank=rank)
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            df_train, num_replicas=dist.get_world_size(), rank=rank)
         train_dl = create_dataloader(
             df_train, 'train', train_params['transform_train'], train_params['batch_size'], True, True, train_params['n_workers'], sampler=train_sampler)
         valid_dl = create_dataloader(
@@ -296,7 +311,8 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, rank, outp
                 model, valid_dl, train_params['criterion'], rank, logger)
             val_wll = train_params['criterion2'](y_preds, labels)
             if rank == 0:
-                logger.info(f'val_loss: {val_loss:.6f}, val_wll: {val_wll:.6f}')
+                logger.info(
+                    f'val_loss: {val_loss:.6f}, val_wll: {val_wll:.6f}')
 
             logs = {
                 'model': model,
@@ -338,22 +354,26 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, rank, outp
 def evaluate_model(df, skf, model_class, model_params, transforms_val, device, output_dir, n_workers, n_labels, logger):
     all_y_preds = []
     all_labels = []
-    criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0]).to(device))
+    criterion = nn.CrossEntropyLoss(
+        weight=torch.tensor([1.0, 2.0, 4.0]).to(device))
 
     for fold, (_, val_idx) in enumerate(skf.split(range(len(df)))):
         logger.info(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
         print(f"Fold: {fold}")
 
         df_valid = df.iloc[val_idx]
-        valid_ds = RSNA24Dataset(df_valid, phase='valid', transform=transforms_val)
-        valid_dl = DataLoader(valid_ds, batch_size=1, shuffle=False, pin_memory=True, drop_last=False, num_workers=n_workers)
+        valid_ds = RSNA24Dataset(
+            df_valid, phase='valid', transform=transforms_val)
+        valid_dl = DataLoader(valid_ds, batch_size=1, shuffle=False,
+                              pin_memory=True, drop_last=False, num_workers=n_workers)
 
         model = model_class(**model_params)
         checkpoint_path = f'{output_dir}/best_model_fold_{fold}.pth'
 
         # Check if the checkpoint exists
         if not os.path.exists(checkpoint_path):
-            logger.warning(f"Checkpoint for fold {fold} not found at {checkpoint_path}. Skipping this fold.")
+            logger.warning(
+                f"Checkpoint for fold {fold} not found at {checkpoint_path}. Skipping this fold.")
             continue
 
         # Load the checkpoint
@@ -544,7 +564,8 @@ def main(data_dir: str):
     # Initialize callbacks only on the master process
     if rank == 0:
         callbacks = [
-            ModelCheckpoint(output_dir=output_dir, monitor='val_loss', mode='min'),
+            ModelCheckpoint(output_dir=output_dir,
+                            monitor='val_loss', mode='min'),
             EarlyStopping(monitor='val_loss', patience=5, mode='min')
         ]
     else:
@@ -557,9 +578,9 @@ def main(data_dir: str):
     # Clean up the process group
     cleanup()
 
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='data')
     main(parser.parse_args().data_dir)
-
