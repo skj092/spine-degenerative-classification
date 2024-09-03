@@ -107,28 +107,6 @@ def create_scheduler(optimizer, train_loader_len, epochs, grad_acc):
     return get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=num_total_steps, num_cycles=num_cycles)
 
 
-def save_best_model(model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir, logger):
-    if val_loss < best_loss or val_wll < best_wll:
-        model_to_save = model.module if hasattr(model, 'module') else model
-
-        if val_loss < best_loss:
-            logger.info(
-                f'epoch:{epoch}, best loss updated from {best_loss:.6f} to {val_loss:.6f}')
-            best_loss = val_loss
-
-        if val_wll < best_wll:
-            logger.info(
-                f'epoch:{epoch}, best wll_metric updated from {best_wll:.6f} to {val_wll:.6f}')
-            best_wll = val_wll
-
-        # Save the model with a consistent name used during evaluation
-        fname = f'{output_dir}/best_wll_model_fold-{fold}.pt'
-        torch.save(model_to_save.state_dict(), fname)
-
-        return best_loss, best_wll, 0
-    return best_loss, best_wll, 1
-
-
 def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, grad_acc, device, logger):
     model.train()
     total_loss = 0
@@ -306,9 +284,9 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
             logger.info(f'val_loss: {val_loss:.6f}, val_wll: {val_wll:.6f}')
             wandb.log({"val_loss": val_loss, "val_wll": val_wll})
 
-            # Save the best model if the validation loss or wll improves
-            best_loss, best_wll, es_step = save_best_model(
-                model, val_loss, val_wll, best_loss, best_wll, fold, epoch, device, output_dir, logger)
+            # Save checkpoint
+            save_checkpoint(model, optimizer, scheduler, scaler,
+                            epoch, fold, val_loss, output_dir)
 
             if es_step >= train_params['early_stopping_epoch']:
                 logger.info('Early stopping')
@@ -338,7 +316,10 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
                               pin_memory=True, drop_last=False, num_workers=n_workers)
 
         model = model_class(**model_params)
-        checkpoint_path = f'{output_dir}/best_model_fold_{fold}.pth'
+        # Load the checkpoint of the last fold
+        #torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}.pth")
+        checkpoint_path = f"{output_dir}/checkpoint_fold_{fold}.pth"
+
 
         # Check if the checkpoint exists
         if not os.path.exists(checkpoint_path):
