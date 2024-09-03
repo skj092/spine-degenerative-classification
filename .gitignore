@@ -5,3 +5,4 @@ data/
 *.pyc
 rsna24-results
 wandb/
+*.csv

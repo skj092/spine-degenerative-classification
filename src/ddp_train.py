@@ -99,7 +99,6 @@ class ModelCheckpoint(Callback):
 def setup(rank, world_size):
     dist.init_process_group(
         backend="nccl",  # Use 'nccl' for GPUs; 'gloo' or 'mpi' for CPUs
-        init_method="tcp://127.0.0.1:23456",  # Use a TCP address
         rank=rank,  # The rank of the current process
         world_size=world_size  # Total number of processes
     )
@@ -232,6 +231,7 @@ def validate_one_epoch(model, valid_dl, criterion, device, logger):
     return avg_loss, y_preds, labels
 
 def train_and_validate(df, n_folds, seed, model_params, train_params, rank, output_dir, logger, callbacks=None):
+    print(f"Rank: {rank}")
     if callbacks is None:
         callbacks = []
 
@@ -492,9 +492,11 @@ def main(data_dir: str):
     # Manually set rank and world_size for Kaggle
     world_size = 2  # Number of GPUs available
     rank = int(os.environ['RANK'])  # Adjust based on the GPU ID
+    print(f"test: {rank}")
 
     # Initialize process group and set up GPU device
     setup(rank, world_size)
+    print(f"Rank: {rank}")
 
     # Initialize directories and seed
     set_seed(config.SEED)
@@ -510,6 +512,7 @@ def main(data_dir: str):
 
     # Data Preprocessing
     df = pd.read_csv(f"{data_dir}/train.csv")
+    print(f"DataFrame shape: {df.shape}")
     subset_size = config.subset_size
     if subset_size:
         df = df.sample(n=subset_size, random_state=config.SEED)
