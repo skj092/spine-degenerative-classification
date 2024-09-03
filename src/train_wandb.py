@@ -418,10 +418,10 @@ def save_predictions_and_labels(y_preds, labels, output_dir, logger):
 # ========================= Main Script ============================
 
 
-def main():
+def main(data_dir: str):
     # Initialize directories and seed
     set_seed(config.SEED)
-    output_dir = f'rsna24-results'
+    output_dir = 'rsna24-results'
     os.makedirs(output_dir, exist_ok=True)
 
     # Setup logging
@@ -431,7 +431,7 @@ def main():
     wandb.run.save()
 
     # Data Preprocessing
-    df = pd.read_csv(Path(__file__).parent.parent / 'data/train.csv')
+    df = pd.read_csv(f'{data_dir}/train.csv')
     subset_size = config.subset_size
     if subset_size:
         print(f"Using subset of size: {subset_size}")
@@ -497,6 +497,7 @@ if __name__ == "__main__":
     # Take config from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="local")
+    parser.add_argument("--data_dir", type=str, default="data")
     config = get_config(parser.parse_args().env)
     wandb.init(project="rsna24", config=config)
-    main()
+    main(data_dir=parser.parse_args().data_dir)
