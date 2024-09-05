@@ -18,7 +18,7 @@ from conf import get_config
 from utils import (setup_logger, compute_cv_score,
                    save_predictions_and_labels)
 
-def main(data_dir: str, config: dict):
+def main(config):
     # Initialize directories and seed
     set_seed(config.SEED)
     output_dir = 'rsna24-results'
@@ -31,7 +31,7 @@ def main(data_dir: str, config: dict):
     wandb.run.save()
 
     # Data Preprocessing
-    df = pd.read_csv(f'{data_dir}/train.csv')
+    df = pd.read_csv(f'{config.CSV_PATH}/train.csv')
     subset_size = config.subset_size
     if subset_size:
         print(f"Using subset of size: {subset_size}")
@@ -97,10 +97,17 @@ if __name__ == "__main__":
     # Take config from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="local")
-    parser.add_argument("--data_dir", type=str, default="data")
+    parser.add_argument("--csv_path", type=str, default="data")
+    parser.add_argument("--data_dir", type=str, default="cvt_png/")
     config = get_config(parser.parse_args().env)
+    config.CSV_PATH = parser.parse_args().csv_path
+    config.DATA_DIR = parser.parse_args().data_dir
     os.environ["WANDB_API_KEY"] = config.WANDB_API_KEY
     wandb.init(project="rsna24", config=config)
     print(f"Using config: {config}")
+    print(f"CSV directory: {parser.parse_args().csv_path}")
     print(f"Data directory: {parser.parse_args().data_dir}")
-    main(data_dir=parser.parse_args().data_dir, config=config)
+    # print all the variables inside config
+    print(f" config {config.__dict__}")
+
+    main(config)

@@ -11,10 +11,11 @@ from conf import config
 
 # Dataset and DataLoader Class
 class RSNA24Dataset(Dataset):
-    def __init__(self, df, phase='train', transform=None):
+    def __init__(self, df, config = config, phase='train', transform=None):
         self.df = df
         self.transform = transform
         self.phase = phase
+        self.data_dir = config.DATA_DIR
 
     def __len__(self):
         return len(self.df)
@@ -28,7 +29,8 @@ class RSNA24Dataset(Dataset):
         # Sagittal T1
         for i in range(0, 10, 1):
             try:
-                p = f'./cvt_png/{st_id}/Sagittal T1/{i:03d}.png'
+                #p = f'./cvt_png/{st_id}/Sagittal T1/{i:03d}.png'
+                p = f"{self.data_dir}/cvt_png/{st_id}/Sagittal T1/{i:03d}.png"
                 img = Image.open(p).convert('L')
                 img = np.array(img)
                 x[..., i] = img.astype(np.uint8)
@@ -39,7 +41,8 @@ class RSNA24Dataset(Dataset):
         # Sagittal T2/STIR
         for i in range(0, 10, 1):
             try:
-                p = f'./cvt_png/{st_id}/Sagittal T2_STIR/{i:03d}.png'
+                #p = f'./cvt_png/{st_id}/Sagittal T2_STIR/{i:03d}.png'
+                p = f"{self.data_dir}/cvt_png/{st_id}/Sagittal T2_STIR/{i:03d}.png"
                 img = Image.open(p).convert('L')
                 img = np.array(img)
                 x[..., i+10] = img.astype(np.uint8)
@@ -48,7 +51,8 @@ class RSNA24Dataset(Dataset):
                 pass
 
         # Axial T2
-        axt2 = glob(f'./cvt_png/{st_id}/Axial T2/*.png')
+        #axt2 = glob(f'./cvt_png/{st_id}/Axial T2/*.png')
+        axt2 = glob(f"{self.data_dir}/cvt_png/{st_id}/Axial T2/*.png")
         axt2 = sorted(axt2)
 
         step = len(axt2) / 10.0
@@ -75,8 +79,8 @@ class RSNA24Dataset(Dataset):
         return x, label
 
 
-def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_workers):
-    dataset = RSNA24Dataset(df, phase=phase, transform=transform)
+def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_workers, config=None):
+    dataset = RSNA24Dataset(df, phase=phase, transform=transform, config=config)
     return DataLoader(
         dataset,
         batch_size=batch_size,
