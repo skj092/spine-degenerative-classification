@@ -113,7 +113,7 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
 
         df_train, df_valid = df.iloc[trn_idx], df.iloc[val_idx]
         train_dl = create_dataloader(
-            df_train, 'train', train_params['transform_train'], train_params['batch_size'], True, True, train_params['n_workers'], config=config)
+            df_train, 'train', train_params['transform_val'], train_params['batch_size'], True, True, train_params['n_workers'], config=config)
         valid_dl = create_dataloader(
             df_valid, 'valid', train_params['transform_val'], train_params['batch_size']*2, False, False, train_params['n_workers'], config=config)
 
