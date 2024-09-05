@@ -1,29 +1,15 @@
 from dataset import create_dataloader
 from models import create_model_and_optimizer, save_checkpoint, create_scheduler
-import argparse
 import wandb
 from dataset import RSNA24Dataset
-from models import RSNA24Model
-from conf import (
-    transforms_train, transforms_val,
-    device, set_seed
-)
 import os
 import torch
-import numpy as np
-import pandas as pd
-import logging
 from tqdm import tqdm
-from pathlib import Path
 from collections import OrderedDict
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from torch.optim import AdamW
 from torch import nn
 from sklearn.model_selection import KFold
-from sklearn.metrics import log_loss
-from transformers import get_cosine_schedule_with_warmup
-from conf import get_config
 
 
 def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, grad_acc, device, logger, config=None):
