@@ -59,6 +59,8 @@ class EarlyStopping(Callback):
 def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device):
     model = RSNA24Model(model_name=model_name,
                         in_chans=in_chans, n_classes=n_classes)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     return model, optimizer
