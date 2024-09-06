@@ -1,7 +1,15 @@
 import numpy as np
+import pandas as pd
+import json
+from conf import get_transforms
 from glob import glob
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
+
+
+class Config:
+    def __init__(self, config_dict):
+        self.__dict__.update(config_dict)
 
 
 # Dataset and DataLoader Class
@@ -87,3 +95,25 @@ def create_dataloader(df, phase, transform, batch_size, shuffle, drop_last, num_
         num_workers=num_workers,
         prefetch_factor=2
     )
+
+
+if __name__ == "__main__":
+    config = json.load(open('configs/local_config.json'))
+    config = Config(config)
+    df = pd.read_csv(f'{config.CSV_PATH}/train.csv')
+    subset_size = config.subset_size
+    if subset_size:
+        print(f"Using subset of size: {subset_size}")
+        df = df.sample(n=subset_size, random_state=config.SEED)
+    print(f"DataFrame shape: {df.shape}")
+    df.fillna(-100, inplace=True)
+    label2id = {'Normal/Mild': 0, 'Moderate': 1, 'Severe': 2}
+    df = df.map(lambda x: label2id.get(x, x))
+    transforms_train, transforms_val = get_transforms(config)
+
+    train_loader = create_dataloader(
+        df, 'train', transforms_train, config.BATCH_SIZE, True, False, 4, config=config)
+    val_loader = create_dataloader(
+        df, 'val', transforms_val, config.BATCH_SIZE, False, False, 4, config=config)
+    xb, yb = next(iter(train_loader))
+    print(xb.shape, yb.shape)
