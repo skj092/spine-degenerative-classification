@@ -109,7 +109,7 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
             df_valid, 'valid', train_params['transform_val'], train_params['batch_size']*2, False, False, train_params['n_workers'], config=config)
 
         model, optimizer = create_model_and_optimizer(
-            **model_params, device=device)
+            **model_params, device=device, config=config)
         scaler = GradScaler(enabled=config.USE_AMP, init_scale=4096)
         scheduler = create_scheduler(optimizer, len(
             train_dl), train_params['epochs'], train_params['grad_acc'])

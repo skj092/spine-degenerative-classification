@@ -3,13 +3,37 @@ from torch.optim import AdamW
 from torch import nn
 from transformers import get_cosine_schedule_with_warmup
 import timm
+import os
+
+
+def load_weights_skip_mismatch(model, weights_path, device):
+    # Load Weights
+    state_dict = torch.load(weights_path, map_location=device)
+    model_dict = model.state_dict()
+
+    # Iter models
+    params = {}
+    for (sdk, sfv), (mdk, mdv) in zip(state_dict.items(), model_dict.items()):
+        if sfv.size() == mdv.size():
+            params[sdk] = sfv
+        else:
+            print("Skipping param: {}, {} != {}".format(
+                sdk, sfv.size(), mdv.size()))
+
+    # Reload + Skip
+    model.load_state_dict(params, strict=False)
+    print("Loaded weights from:", weights_path)
 
 
 class RSNA24Model(nn.Module):
-    def __init__(self, model_name, in_chans=10, n_classes=75, pretrained=True, features_only=False, lr=2e-4, wd=1e-2):
+    def __init__(self, model_name, in_chans=10, n_classes=75, pretrained=True, features_only=False, lr=2e-4, wd=1e-2, config=None):
         super().__init__()
         self.model = timm.create_model(model_name, pretrained=pretrained, in_chans=in_chans,
                                        num_classes=n_classes, features_only=features_only, global_pool='avg')
+        if pretrained:
+            f = "{}_{}.pt".format(config.backbone, config.seed)
+            load_weights_skip_mismatch(self.model, f, config.device)
+            print("Loaded weights from:", f)
 
     def forward(self, xb):
         return self.model(xb)
@@ -56,9 +80,9 @@ class EarlyStopping(Callback):
                 print(f"Early stopping at epoch {epoch}")
 
 
-def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device):
+def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device, config=None):
     model = RSNA24Model(model_name=model_name,
-                        in_chans=in_chans, n_classes=n_classes)
+                        in_chans=in_chans, n_classes=n_classes, config=config)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(device)

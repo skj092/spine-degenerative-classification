@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
     # Model
     # tf_efficientnet_b3.ns_jft_in1k
-    model = timm.create_model('resnet18', pretrained=True, num_classes=10)
+    model = timm.create_model(cfg.backbone, pretrained=True, num_classes=10)
     # Use all the GPUs
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -244,10 +244,11 @@ if __name__ == "__main__":
     print("Training complete...")
 
     f = "{}_{}.pt".format(cfg.backbone, cfg.seed)
+    f = os.path.join(cfg.output_dir, f)
     torch.save(model.state_dict(), f)
     print("Saved weights: {}".format(f))
 
     # Load backbone for RSNA 2024 task
-    model = timm.create_model('resnet18', pretrained=True, num_classes=75)
+    model = timm.create_model(cfg.backbone, pretrained=True, num_classes=75)
     model = model.to(cfg.device)
     load_weights_skip_mismatch(model, f, cfg.device)
