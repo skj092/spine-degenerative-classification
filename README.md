@@ -4,7 +4,7 @@
 
 
 
-## Learned So Far:
+## Progress so far
 
 1. Preproces Dicom files to PNG, and save them into folder categorised by class.
 2. Preparing DataLoader for multi axial medical images.
