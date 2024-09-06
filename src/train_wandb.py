@@ -32,9 +32,6 @@ def main(config):
     # Setup logging
     log_file = os.path.join(output_dir, 'training_log.txt')
     logger = setup_logger(log_file)
-    if config.USE_WANDB:
-        wandb.run.name = "RSNA24 Training"
-        wandb.run.save()
 
     # Data Preprocessing
     df = pd.read_csv(f'{config.CSV_PATH}/train.csv')
@@ -109,6 +106,6 @@ if __name__ == "__main__":
     print(f"Using config: {config}")
     if config.USE_WANDB:
         os.environ["WANDB_API_KEY"] = config.WANDB_API_KEY
-        wandb.init(project="rsna24", config=config)
+        wandb.init(project="rsna24", config=config, name="RSNA24 Training")
     print(f"Using config: {config}")
     main(config)
