@@ -1,7 +1,7 @@
 {
   "NOT_DEBUG": true,
   "OUTPUT_DIR": "rsna24-results",
-  "device": "cuda" if "torch.cuda.is_available()" else "cpu",
+  "device": "cuda",
   "N_WORKERS": "os.cpu_count()",
   "USE_AMP": true,
   "SEED": 8620,

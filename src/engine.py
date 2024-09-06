@@ -22,6 +22,7 @@ def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, gr
             with autocast(device_type=str(device), enabled=config.USE_AMP, dtype=torch.half):
                 loss = 0
                 y = model(x)
+                # calculating the loss separately for each label or class ensures that each output is given the appropriate attention.
                 for col in range(config.N_LABELS):
                     pred = y[:, col*3:col*3+3]
                     gt = t[:, col]
@@ -43,12 +44,14 @@ def train_one_epoch(model, train_dl, criterion, optimizer, scheduler, scaler, gr
 
             pbar.set_postfix(OrderedDict(
                 loss=f'{loss.item()*grad_acc:.6f}', lr=f'{optimizer.param_groups[0]["lr"]:.3e}'))
-            wandb.log({"train_loss": loss.item() * grad_acc,
+            if config.USE_WANDB:
+                wandb.log({"train_loss": loss.item() * grad_acc,
                       "learning_rate": optimizer.param_groups[0]["lr"]})
 
     avg_loss = total_loss / len(train_dl)
     logger.info(f'Training Loss: {avg_loss:.6f}')
-    wandb.log({"avg_train_loss": avg_loss})
+    if config.USE_WANDB:
+        wandb.log({"avg_train_loss": avg_loss})
     return avg_loss
 
 
@@ -80,7 +83,8 @@ def validate_one_epoch(model, valid_dl, criterion, device, logger, config=None):
     labels = torch.cat(labels)
 
     logger.info(f'Validation Loss: {avg_loss:.6f}')
-    wandb.log({"val_loss": avg_loss})
+    if config.USE_WANDB:
+        wandb.log({"val_loss": avg_loss})
     return avg_loss, y_preds, labels
 
 
@@ -93,7 +97,8 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
 
     for fold, (trn_idx, val_idx) in enumerate(skf.split(range(len(df)))):
         logger.info(f'\n{"#"*30}\nStart fold {fold}\n{"#"*30}\n')
-        wandb.log({"fold": fold})
+        if config.USE_WANDB:
+            wandb.log({"fold": fold})
         logger.info(
             f'{len(trn_idx)} training samples, {len(val_idx)} validation samples')
 
@@ -114,7 +119,8 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
 
         for epoch in range(train_params['epochs']):
             logger.info(f'Start epoch {epoch}')
-            wandb.log({"epoch": epoch})
+            if config.USE_WANDB:
+                wandb.log({"epoch": epoch})
 
             for callback in callbacks:
                 callback.on_epoch_begin(epoch)
@@ -127,7 +133,8 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
                 model, valid_dl, train_params['criterion'], device, logger, config=config)
             val_wll = train_params['criterion2'](y_preds, labels)
             logger.info(f'val_loss: {val_loss:.6f}, val_wll: {val_wll:.6f}')
-            wandb.log({"val_loss": val_loss, "val_wll": val_wll})
+            if config.USE_WANDB:
+                wandb.log({"val_loss": val_loss, "val_wll": val_wll})
 
             # Save checkpoint
             save_checkpoint(model, optimizer, scheduler, scaler,
