@@ -1,5 +1,5 @@
 {
-  "NOT_DEBUG": false,
+  "DEBUG": true,
   "OUTPUT_DIR": "rsna24-results",
   "device": "cpu",
   "N_WORKERS": 0,
@@ -17,7 +17,7 @@
   "WD": 0.01,
   "AUG": true,
   "N_FOLDS": 2,
-  "EPOCHS": 2,
+  "EPOCHS": 1,
   "MODEL_NAME": "tf_efficientnet_b3.ns_jft_in1k",
   "BATCH_SIZE": 1,
   "subset_size": 5,

@@ -8,3 +8,5 @@ wandb/
 *.csv
 tmp
 *.pt
+checkpoints/
+logs/
