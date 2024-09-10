@@ -162,6 +162,7 @@ def main(config: dict):
             mode='min'
         )
         trainer = pl.Trainer(
+            accelerator="gpu",
             max_epochs=config.EPOCHS,
             logger=logger,
             callbacks=[checkpoint_callback, early_stop_callback]
