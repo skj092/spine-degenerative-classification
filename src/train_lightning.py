@@ -61,7 +61,7 @@ class LightningModel(pl.LightningModule):
         self.model = model
         self.config = config
         self.loss_fn = nn.CrossEntropyLoss(
-            weight=torch.tensor([1.0, 2.0, 4.0])).to(config.device)
+            weight=torch.tensor([1.0, 2.0, 4.0]))
         self.grad_accum = grad_accum
 
     def forward(self, x):
@@ -81,7 +81,6 @@ class LightningModel(pl.LightningModule):
                 loss += self.loss_fn(pred, gt) / self.config.N_CLASSES
         total_loss += loss
         # log average training loss for all the training dataloader
-
 
         # Log training loss and learning rate
         self.log('train_loss', loss, on_step=True,
@@ -162,7 +161,7 @@ def main(config: dict):
             mode='min'
         )
         trainer = pl.Trainer(
-            accelerator="gpu",
+            accelerator=config.device,
             max_epochs=config.EPOCHS,
             logger=logger,
             callbacks=[checkpoint_callback, early_stop_callback]
