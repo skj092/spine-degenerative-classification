@@ -162,8 +162,6 @@ def main(config: dict):
         train_df, val_df = df.iloc[train_idx], df.iloc[val_idx]
         print(f"Fold: {fold}", "Train:", len(train_df), "Val:", len(val_df))
         data_module = DataModule(train_df, val_df, config)
-        print(f"train dataloader length: {len(data_module.train_dataloader())}")
-        print(f"val dataloader length: {len(data_module.val_dataloader())}")
 
         # Model
         model = LightningModel(config)
