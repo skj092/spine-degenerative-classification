@@ -37,7 +37,7 @@ class DataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         if self.config.DEBUG:
-            self.train_df = self.train_df.sample(4)
+            self.train_df = self.train_df.sample(32)
         train_dataset = RSNA24Dataset(
             df=self.train_df, config=self.config, transform=self.train_transform)
         train_loader = torch.utils.data.DataLoader(
@@ -46,7 +46,7 @@ class DataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         if self.config.DEBUG:
-            self.valid_df = self.valid_df.sample(4)
+            self.valid_df = self.valid_df.sample(32)
         val_dataset = RSNA24Dataset(
             df=self.valid_df, config=self.config, transform=self.val_transform)
         val_loader = torch.utils.data.DataLoader(
