@@ -23,5 +23,6 @@
   "subset_size": null,
   "WANDB_API_KEY": "97b5307e24cc3a77259ade3057e4eea6fd2addb0",
   "CSV_PATH": "/content/drive/MyDrive/Models/spine-degenerative-classification/data",
-  "DATA_DIR": "/content/drive/MyDrive/Models/spine-degenerative-classification/"
+  "DATA_DIR": "/content/drive/MyDrive/Models/spine-degenerative-classification/",
+  "CHECKPOINT_PATH": "checkpoints/",
 }
