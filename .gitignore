@@ -6,3 +6,7 @@ data/
 rsna24-results
 wandb/
 *.csv
+tmp
+*.pt
+checkpoints/
+logs/

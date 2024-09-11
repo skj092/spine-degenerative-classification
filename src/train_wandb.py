@@ -1,11 +1,11 @@
 import argparse
+import json
 from models import EarlyStopping, ModelCheckpoint
 from engine import train_and_validate, evaluate_model
 import wandb
 from models import RSNA24Model
 from conf import (
-    transforms_train, transforms_val,
-    device, set_seed
+    device, set_seed, get_transforms
 )
 import os
 import torch
@@ -14,9 +14,14 @@ import pandas as pd
 from torch import nn
 from sklearn.model_selection import KFold
 from sklearn.metrics import log_loss
-from conf import get_config
 from utils import (setup_logger, compute_cv_score,
                    save_predictions_and_labels)
+
+
+class Config:
+    def __init__(self, config_dict):
+        self.__dict__.update(config_dict)
+
 
 def main(config):
     # Initialize directories and seed
@@ -27,8 +32,6 @@ def main(config):
     # Setup logging
     log_file = os.path.join(output_dir, 'training_log.txt')
     logger = setup_logger(log_file)
-    wandb.run.name = "RSNA24 Training"
-    wandb.run.save()
 
     # Data Preprocessing
     df = pd.read_csv(f'{config.CSV_PATH}/train.csv')
@@ -48,6 +51,7 @@ def main(config):
         'lr': config.LR,
         'wd': config.WD,
     }
+    transforms_train, transforms_val = get_transforms(config)
 
     train_params = {
         "lr": config.LR,
@@ -96,18 +100,12 @@ def main(config):
 if __name__ == "__main__":
     # Take config from command line
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="local")
-    parser.add_argument("--csv_path", type=str, default="data")
-    parser.add_argument("--data_dir", type=str, default="cvt_png/")
-    config = get_config(parser.parse_args().env)
-    config.CSV_PATH = parser.parse_args().csv_path
-    config.DATA_DIR = parser.parse_args().data_dir
-    os.environ["WANDB_API_KEY"] = config.WANDB_API_KEY
-    wandb.init(project="rsna24", config=config)
+    parser.add_argument("--cfg")
+    config_dict = json.load(open(parser.parse_args().cfg))
+    config = Config(config_dict)
     print(f"Using config: {config}")
-    print(f"CSV directory: {parser.parse_args().csv_path}")
-    print(f"Data directory: {parser.parse_args().data_dir}")
-    # print all the variables inside config
-    print(f" config {config.__dict__}")
-
+    if config.USE_WANDB:
+        os.environ["WANDB_API_KEY"] = config.WANDB_API_KEY
+        wandb.init(project="rsna24", config=config, name="RSNA24 Training")
+    print(f"Using config: {config}")
     main(config)
