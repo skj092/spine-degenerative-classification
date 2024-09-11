@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 import torch
 from conf import get_transforms
 import wandb
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 import timm
 from pytorch_lightning import LightningModule
 
@@ -25,7 +25,7 @@ class Config:
 
 # DataModule Class
 class DataModule(pl.LightningDataModule):
-    def __init__(self, train_df, valid_df, config):
+    def __init__(self, train_df: pd.DataFrame, valid_df: pd.DataFrame, config: Config):
         super().__init__()
         self.config = config
         self.train_transform, self.val_transform = get_transforms(config)
@@ -89,14 +89,13 @@ class LightningModel(pl.LightningModule):
         if self.config.device == 'cuda':
             x, y = x.cuda(), y.cuda()
 
-        with autocast(enabled=self.config.USE_AMP, dtype=torch.half):
+        with autocast(enabled=self.config.USE_AMP, dtype=torch.half, device_type=config.device):
             y_hat = self.model(x)  # (bs, 75)
             loss = 0
             for col in range(self.config.N_LABELS):
                 pred = y_hat[:, col*3:col*3+3]  # (bs, 3)
                 gt = y[:, col]  # (bs)
                 loss += self.loss_fn(pred, gt) / self.config.N_LABELS
-
 
         # Log training loss and learning rate
         self.log('train_loss', loss, on_step=True,
@@ -111,7 +110,7 @@ class LightningModel(pl.LightningModule):
         x, y = batch
         if self.config.device == 'cuda':
             x, y = x.cuda(), y.cuda()
-        with autocast(enabled=self.config.USE_AMP, dtype=torch.half):
+        with autocast(enabled=self.config.USE_AMP, dtype=torch.half, device_type=config.device):
             y_hat = self.model(x)
             loss = 0
             for col in range(self.config.N_LABELS):
@@ -201,4 +200,3 @@ if __name__ == "__main__":
     config = Config(config_dict)
     print(f"Using config: {parser.parse_args().cfg}")
     main(config)
-

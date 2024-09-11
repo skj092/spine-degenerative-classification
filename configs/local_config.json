@@ -2,7 +2,7 @@
   "DEBUG": true,
   "OUTPUT_DIR": "rsna24-results",
   "device": "cpu",
-  "N_WORKERS": 0,
+  "N_WORKERS": 2,
   "USE_AMP": true,
   "SEED": 8620,
   "IMG_SIZE": [512, 512],
