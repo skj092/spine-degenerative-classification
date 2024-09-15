@@ -8,10 +8,19 @@ from sklearn.metrics import log_loss
 def setup_logger(log_file):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    handler = logging.FileHandler(log_file, mode='w')
-    handler.setFormatter(logging.Formatter(
+
+    # Create a file handler
+    file_handler = logging.FileHandler(log_file, mode='w')
+    file_handler.setFormatter(logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s'))
-    logger.addHandler(handler)
+    logger.addHandler(file_handler)
+
+    # Create a console handler (StreamHandler)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(console_handler)
+
     return logger
 
 
