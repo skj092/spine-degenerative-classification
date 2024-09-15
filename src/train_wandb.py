@@ -77,24 +77,24 @@ def main(config):
     train_and_validate(df, config.N_FOLDS, config.SEED, model_params,
                        train_params, device, output_dir, logger, callbacks=callbacks, config=config)
 
-    # Evaluate the model
-    skf = KFold(n_splits=config.N_FOLDS, shuffle=True,
-                random_state=config.SEED)
-    y_preds, labels = evaluate_model(
-        df, skf, RSNA24Model, model_params, transforms_val, device, output_dir, os.cpu_count(), config.N_LABELS, logger, config=config)
-
-    # Compute CV score and random score
-    weights = [1 if l == 0 else 2 if l == 1 else 4 for l in labels.numpy()]
-    cv_score = compute_cv_score(y_preds, labels, weights, logger)
-    print(f"CV Score: {cv_score:.6f}")
-
-    random_pred = np.ones((y_preds.shape[0], 3)) / 3.0
-    random_score = log_loss(labels, random_pred,
-                            normalize=True, sample_weight=weights)
-    print(f"Random Score: {random_score:.6f}")
-
-    # Save predictions and labels
-    save_predictions_and_labels(y_preds, labels, output_dir, logger)
+#    # Evaluate the model
+#    skf = KFold(n_splits=config.N_FOLDS, shuffle=True,
+#                random_state=config.SEED)
+#    y_preds, labels = evaluate_model(
+#        df, skf, RSNA24Model, model_params, transforms_val, device, output_dir, os.cpu_count(), config.N_LABELS, logger, config=config)
+#
+#    # Compute CV score and random score
+#    weights = [1 if l == 0 else 2 if l == 1 else 4 for l in labels.numpy()]
+#    cv_score = compute_cv_score(y_preds, labels, weights, logger)
+#    print(f"CV Score: {cv_score:.6f}")
+#
+#    random_pred = np.ones((y_preds.shape[0], 3)) / 3.0
+#    random_score = log_loss(labels, random_pred,
+#                            normalize=True, sample_weight=weights)
+#    print(f"Random Score: {random_score:.6f}")
+#
+#    # Save predictions and labels
+#    save_predictions_and_labels(y_preds, labels, output_dir, logger)
 
 
 if __name__ == "__main__":
