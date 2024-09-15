@@ -125,10 +125,12 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
             for callback in callbacks:
                 callback.on_epoch_begin(epoch)
 
+            logger.info(f"Training for fold {fold}, epoch {epoch}")
             train_loss = train_one_epoch(
                 model, train_dl, train_params['criterion'], optimizer, scheduler, scaler, train_params['grad_acc'], device, logger, config=config)
             logger.info(f'train_loss: {train_loss:.6f}')
 
+            logger.info(f"Validating for fold {fold}, epoch {epoch}")
             val_loss, y_preds, labels = validate_one_epoch(
                 model, valid_dl, train_params['criterion'], device, logger, config=config)
             val_wll = train_params['criterion2'](y_preds, labels)
@@ -136,13 +138,8 @@ def train_and_validate(df, n_folds, seed, model_params, train_params, device, ou
             if config.USE_WANDB:
                 wandb.log({"val_loss": val_loss, "val_wll": val_wll})
 
-            # Save checkpoint
             save_checkpoint(model, optimizer, scheduler, scaler,
                             epoch, fold, val_loss, output_dir)
-
-            if es_step >= train_params['early_stopping_epoch']:
-                logger.info('Early stopping')
-                break
 
         for callback in callbacks:
             callback.on_train_end()
@@ -163,14 +160,15 @@ def evaluate_model(df, skf, model_class, model_params, transforms_val, device, o
 
         df_valid = df.iloc[val_idx]
         valid_ds = RSNA24Dataset(
-            df_valid, phase='valid', transform=transforms_val)
+            df_valid, phase='valid', transform=transforms_val, config=config)
         valid_dl = DataLoader(valid_ds, batch_size=1, shuffle=False, prefetch_factor=2,
                               pin_memory=True, drop_last=False, num_workers=n_workers)
 
         model = model_class(**model_params)
         # Load the checkpoint of the last fold
         # torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}.pth")
-        checkpoint_path = f"{output_dir}/checkpoint_fold_{fold}.pth"
+        # torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}_epoch_{epoch}.pth")
+        checkpoint_path = f"{output_dir}/checkpoint_fold_{fold}_epoch_{config.EPOCHS-1}.pth"
 
         # Check if the checkpoint exists
         if not os.path.exists(checkpoint_path):

@@ -59,8 +59,8 @@ class EarlyStopping(Callback):
 def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device):
     model = RSNA24Model(model_name=model_name,
                         in_chans=in_chans, n_classes=n_classes)
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
+#    if torch.cuda.device_count() > 1:
+#        model = nn.DataParallel(model)
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     return model, optimizer
@@ -108,6 +108,7 @@ class ModelCheckpoint(Callback):
 
 
 def save_checkpoint(model, optimizer, scheduler, scaler, epoch, fold, loss, output_dir):
+    print(f"saving checkpoint for fold {fold} at epoch {epoch}")
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
@@ -116,7 +117,7 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, fold, loss, outp
         'scaler_state_dict': scaler.state_dict() if scaler else None,
         'loss': loss,
     }
-    torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}.pth")
+    torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}_epoch_{epoch}.pth")
 
 
 def load_checkpoint(model, optimizer, scheduler, scaler, checkpoint_path, device):
