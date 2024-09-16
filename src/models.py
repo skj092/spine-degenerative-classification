@@ -117,7 +117,7 @@ def save_checkpoint(model, optimizer, scheduler, scaler, epoch, fold, loss, outp
         'scaler_state_dict': scaler.state_dict() if scaler else None,
         'loss': loss,
     }
-    torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}_epoch_{epoch}.pth")
+    torch.save(checkpoint, f"{output_dir}/checkpoint_fold_{fold}.pth")
 
 
 def load_checkpoint(model, optimizer, scheduler, scaler, checkpoint_path, device):
