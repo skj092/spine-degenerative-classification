@@ -64,7 +64,8 @@ def main(config):
         'grad_acc': config.GRAD_ACC,
         'criterion': nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0]).to(device)),
         'criterion2': nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 4.0])),
-        'early_stopping_epoch': config.EARLY_STOPPING_EPOCH
+        'early_stopping_epoch': config.EARLY_STOPPING_EPOCH,
+        'pretrained_path': config.PRETRAINED_PATH
     }
 
     # Initialize callbacks

@@ -128,7 +128,7 @@ def visualize_prediction(batch, pred, epoch):
 
 def load_weights_skip_mismatch(model, weights_path, device):
     # Load Weights
-    state_dict = torch.load(weights_path, map_location=device)
+    state_dict = torch.load(weights_path, map_location=device, weights_only=True)
     model_dict = model.state_dict()
 
     # Iter models
@@ -143,6 +143,7 @@ def load_weights_skip_mismatch(model, weights_path, device):
     # Reload + Skip
     model.load_state_dict(params, strict=False)
     print("Loaded weights from:", weights_path)
+    return model
 
 
 if __name__ == "__main__":
@@ -192,13 +193,10 @@ if __name__ == "__main__":
         train_ds, batch_size=cfg.batch_size, shuffle=True, drop_last=True)
     val_dl = torch.utils.data.DataLoader(
         val_ds, batch_size=cfg.batch_size, shuffle=False)
+    print(f"length of train_dl and valid dl: {len(train_dl), len(val_dl)}")
 
     # Model
-    # tf_efficientnet_b3.ns_jft_in1k
-    model = timm.create_model('resnet18', pretrained=True, num_classes=10)
-    # Use all the GPUs
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
+    model = timm.create_model(cfg.MODEL_NAME, pretrained=True, num_classes=10)
     model = model.to(cfg.device)
 
     # Loss / Optim
@@ -239,6 +237,10 @@ if __name__ == "__main__":
                     wandb.log({"val_loss": val_loss})
             val_loss /= len(val_dl)
 
+        # save model for each epochs
+        checkpoint_path = f"checkpoints/{cfg.backbone}_{cfg.seed}_{epoch}.pt"
+        os.makedirs("checkpoints", exist_ok=True)
+        torch.save(model.state_dict(), checkpoint_path)
         print(
             f"Epoch {epoch+1}, Training Loss: {loss.item()}, Validation Loss: {val_loss}")
     print("Training complete...")
@@ -248,6 +250,6 @@ if __name__ == "__main__":
     print("Saved weights: {}".format(f))
 
     # Load backbone for RSNA 2024 task
-    model = timm.create_model('resnet18', pretrained=True, num_classes=75)
+    model = timm.create_model(cfg.MODEL_NAME, pretrained=True, num_classes=75)
     model = model.to(cfg.device)
     load_weights_skip_mismatch(model, f, cfg.device)

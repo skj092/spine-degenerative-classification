@@ -1,11 +1,12 @@
 {
+  "MODEL_NAME": "tf_efficientnet_b3.ns_jft_in1k",
   "data_dir": "tmp",
   "device": "cuda",
   "n_frames": 3,
   "epochs": 2,
   "lr": 0.0005,
   "batch_size": 16,
-  "backbone": "resnet18",
+  "backbone": "tf_efficientnet_b3.ns_jft_in1k",
   "seed": 0,
   "tmp_dir": "tmp",
   "USE_WANDB": false,

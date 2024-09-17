@@ -3,6 +3,7 @@ from torch.optim import AdamW
 from torch import nn
 from transformers import get_cosine_schedule_with_warmup
 import timm
+from pretrain_with_coordinate import load_weights_skip_mismatch
 
 
 class RSNA24Model(nn.Module):
@@ -56,11 +57,15 @@ class EarlyStopping(Callback):
                 print(f"Early stopping at epoch {epoch}")
 
 
-def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device):
+def create_model_and_optimizer(model_name, in_chans, n_classes, lr, wd, device, pretrained_path=None):
     model = RSNA24Model(model_name=model_name,
                         in_chans=in_chans, n_classes=n_classes)
 #    if torch.cuda.device_count() > 1:
 #        model = nn.DataParallel(model)
+    if pretrained_path:
+        print(f"Loading pretrained model from {pretrained_path}")
+        print('===============================')
+        model = load_weights_skip_mismatch(model, pretrained_path, device)
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     return model, optimizer
